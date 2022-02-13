@@ -1,0 +1,190 @@
+//####################################################################################################################################################################################
+//---------------------------------------------------------------------------------Gửi dữ liệu DHT11 kèm thời gian từ internet tới Firebase Relatime Database
+#include <ESP8266WiFi.h>
+#include <FirebaseArduino.h>
+#include <ArduinoJson.h>
+#include <ESP8266HTTPClient.h>
+#include "DHT.h"
+#include <NTPClient.h>
+#include <WiFiUdp.h>
+
+#define FIREBASE_HOST "" //--> địa chỉ URL Firebase Realtime Database của bạn
+#define FIREBASE_AUTH "" //--> firebase database secret code.
+
+#define ON_Board_LED 2  //--> Xác định đèn LED trên bo mạch, được sử dụng cho các chỉ số báo khi quá trình kết nối với bộ định tuyến wifi
+
+#define DHTTYPE DHT11
+
+//----------------------------------------SSID and Password của WiFi router.
+const char* ssid = "huy"; //--> Nhập wifi name or SSID.
+const char* password = "12345678"; //--> Nhập mật khẩu wifi.
+//----------------------------------------
+
+const int DHTPin = 5; //--> Chân được sử dụng cho cảm biến DHT11 là Chân D1 = GPIO5
+DHT dht(DHTPin, DHTTYPE); //--> Khởi tạo cảm biến DHT, DHT dht (Pin_used, Type_of_DHT_Sensor);
+
+//---------------------------------------- Điều chỉnh UTC
+// Bạn cần điều chỉnh chênh lệch UTC cho múi giờ của mình tính bằng mili giây. 
+// Xem danh sách chênh lệch thời gian UTC tại đây: https://en.wikipedia.org/wiki/List_of_UTC_time_offsets
+// Dưới đây là một số ví dụ cho các múi giờ khác nhau:
+// > Với UTC -5.00 : -5 * 60 * 60 : -18000
+// > Với UTC +1.00 : 1 * 60 * 60 : 3600
+// > Với UTC +0.00 : 0 * 60 * 60 : 0
+
+// Đây là tính toán điều chỉnh UTC của nhóm: 
+// > UTC của VN : UTC +07:00
+// > UTC +07:00 -> 7 * 60 * 60 = 25200
+const long utcOffsetInSeconds = 25200;
+//----------------------------------------
+
+
+//---------------------------------------- Xác định ứng dụng khách NTP để có thời gian
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, "pool.ntp.org", utcOffsetInSeconds);
+//----------------------------------------
+
+String DBnm = "DHT11SensorDatawithTime";
+String TD = "Temperature";
+String HD = "Humidity";
+
+int count = 0;
+
+void setup() {
+  Serial.begin(115200);
+  delay(500);
+
+  dht.begin();  //--> Bắt đầu đọc DHT11 sensors
+  delay(500);
+  
+  WiFi.begin(ssid, password); //--> Kết nối WiFi router
+  Serial.println("");
+    
+  pinMode(ON_Board_LED,OUTPUT); //--> Cổng LED trên bo mạch hướng Đầu ra
+  digitalWrite(ON_Board_LED, HIGH); //--> Tắt đèn Led On Board
+
+  //----------------------------------------Chờ kết nối
+  Serial.print("Đang kết nối");
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print(".");
+    //---------------------------------------- Làm cho đèn LED nhấp nháy trên bảng trong quá trình kết nối với bộ định tuyến wifi.
+    digitalWrite(ON_Board_LED, LOW);
+    delay(250);
+    digitalWrite(ON_Board_LED, HIGH);
+    delay(250);
+    //----------------------------------------
+  }
+  //----------------------------------------
+  digitalWrite(ON_Board_LED, HIGH); //--> Tắt đèn LED trên Board khi nó được kết nối với bộ định tuyến wifi.
+  //---------------------------------------- Nếu kết nối thành công với bộ định tuyến wifi, Địa chỉ IP truy cập sẽ được hiển thị trong màn hình 
+  Serial.println("");
+  Serial.print("Thành công kết nối tới : ");
+  Serial.println(ssid);
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+  Serial.println();
+  //----------------------------------------
+
+  //----------------------------------------
+  timeClient.begin();
+  //----------------------------------------
+
+  //----------------------------------------Firebase Realtime Database Configuration.
+  Firebase.begin(FIREBASE_HOST, FIREBASE_AUTH);
+  //----------------------------------------
+}
+
+void loop() {
+  //---------------------------------------- Ở đây, việc gửi dữ liệu đến Cơ sở dữ liệu thời gian thực của Firebase được giới hạn gửi 5 lần.
+  // Bỏ điều kiện này nếu bạn muốn gửi dữ liệu liên tục.
+  if (count < 5) {
+    count++;
+
+    //---------------------------------------- Nhận thời gian từ internet và định dạng hiển thị.    
+    // Nếu không có các điều kiện bên dưới, hiển thị thời gian sẽ như sau: 1: 1: 1, 1: 50: 5
+    // Với điều kiện bên dưới, thời gian hiển thị sẽ như thế này: 01:01:01, 01:50:05
+    timeClient.update();
+    String hr, mn, sc;
+    if (timeClient.getHours() < 10) {
+      hr = "0" + String(timeClient.getHours());
+    }
+    else {
+      hr = String(timeClient.getHours());
+    }
+    
+    if (timeClient.getMinutes() < 10) {
+      mn = "0" + String(timeClient.getMinutes());
+    }
+    else {
+      mn = String(timeClient.getMinutes());
+    }
+  
+    if (timeClient.getSeconds() < 10) {
+      sc = "0" + String(timeClient.getSeconds());
+    }
+    else {
+      sc = String(timeClient.getSeconds());
+    }
+    
+    String TimeNow = hr + ":" + mn + ":" + sc;
+    Serial.print(TimeNow);
+    //----------------------------------------
+
+    //---------------------------------------- Đọc nhiệt độ và độ ẩm
+    // Đọc nhiệt độ hoặc độ ẩm mất khoảng 250 mili giây!
+    // Các chỉ số cảm biến cũng có thể lên đến 2 giây (cảm biến chậm)
+    int h = dht.readHumidity(); //--> Đọc độ ẩm.
+    float t = dht.readTemperature(); //--> Đọc nhiệt độ dưới dạng độ C (mặc định). 
+    // float tf = dht.readTemperature(true); //--> // Đọc nhiệt độ dưới dạng độ F (isFahrenheit = true)
+    
+    // Kiểm tra xem có bất kỳ lần đọc nào failed không và exit (để thử lại).
+    if (isnan(h) || isnan(t)) {
+      Serial.println(" Failed to load DHT sensor !");
+      delay(1000);
+      return;
+    }
+    //----------------------------------------
+  
+    Serial.print(F(", Humidity: "));
+    Serial.print(h);
+    Serial.print(F("%  Temperature: "));
+    Serial.print(t);
+    Serial.println(F("°C "));
+  
+    String strHum = String(h); //--> Chuyển đổi giá trị Độ ẩm thành kiểu dữ liệu Chuỗi.
+    String strTem = String(t); //--> Chuyển đổi các giá trị Nhiệt độ thành kiểu dữ liệu Chuỗi.
+
+    //---------------------------------------- Gửi dữ liệu Độ ẩm tới Firebase Realtime Database.
+    String DBaddH = DBnm + "/" + TimeNow + "/" + HD; //--> Tạo 1 Database path
+    Firebase.setString(DBaddH,strHum); //--> Lệnh hoặc mã để gửi dữ liệu Độ ẩm ở dạng kiểu dữ liệu Chuỗi đến Firebase Realtime Database.
+
+    // Điều kiện để xử lý lỗi.
+    if (Firebase.failed()) {
+        Serial.print("thiết lập Humidity thất bại :");
+        Serial.println(Firebase.error());  
+        delay(500);
+        return;
+    }
+    //----------------------------------------
+
+    //---------------------------------------- Gửi dữ liệu Nhiệt độ tới Firebase Realtime Database.
+    String DBaddT = DBnm + "/" + TimeNow + "/" + TD; //--> Tạo 1 Database path
+    Firebase.setString(DBaddT,strTem); //--> Lệnh hoặc mã để gửi dữ liệu Nhiệt độ ở dạng kiểu dữ liệu Chuỗi tới Firebase Realtime Database.
+
+    // Điều kiện để xử lý lỗi.
+    if (Firebase.failed()) {
+        Serial.print("thiết lập Temperature thất bại :");
+        Serial.println(Firebase.error());  
+        delay(500);
+        return;
+    }
+    //----------------------------------------
+    
+    Serial.println("Thiết lập thành công");
+    Serial.println();
+    
+    delay(5000);
+  }
+  //----------------------------------------
+}
+
+//####################################################################################################################################################################################
