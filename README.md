@@ -1,9 +1,13 @@
 Ứng dụng IOT, xây dựng app giám sát nhiệt độ và độ ẩm realtime. Thu thập dữ liệu từ sensor và xây dựng mô hình dự báo bằng python
 ## Phương pháp thực hiện 
 Phương pháp được phát triển gồm các bước sau.
+
 **Bước 1:** NodeMcu thu thập thông tin từ cảm biến DHT11 dựa trên mã được kết xuất trong bộ vi điều khiển NODEMCU và gửi dữ liệu lên Firebase
-**Bước 2:** Dữ liệu thu thập từ firebase được lưu dưới dạng json. 
+
+**Bước 2:** Dữ liệu thu thập từ firebase được lưu dưới dạng json.
+
 **Bước 3:** Thuật toán sử dụng để hiển thị dữ liệu về thời tiết.
+
 **Bước 4:** Kết quả được hiển thị trong chế độ xem Arduino IDE, Firebase, Webserver và Android App.
 
 | ![System Architecture Diagram](2022-02-14-16-06-50.png "System Architecture Diagram") | 
