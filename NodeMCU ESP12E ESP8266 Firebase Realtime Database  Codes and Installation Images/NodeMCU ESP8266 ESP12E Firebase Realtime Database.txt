@@ -7,6 +7,7 @@
 #include "DHT.h"
 #include <NTPClient.h>
 #include <WiFiUdp.h>
+#include "PageIndex.h" //--> Include nội dung giao diện web, nhớ lưu cùng thư mục chứ file .ino
 
 #define FIREBASE_HOST "" //--> địa chỉ URL Firebase Realtime Database của bạn
 #define FIREBASE_AUTH "" //--> firebase database secret code.
